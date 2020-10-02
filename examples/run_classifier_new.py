@@ -35,7 +35,7 @@ from torch.nn import CrossEntropyLoss, MSELoss
 from tensorboardX import SummaryWriter
 
 from pytorch_pretrained_bert.modeling_new import *
-from pytorch_pretrained_bert.tokenization import BertTokenizer
+from pytorch_pretrained_bert.tokenization import FullTokenizer
 from pytorch_pretrained_bert.optimization import BertAdam
 
 from examples.run_classifier_dataset_utils_new import processors, output_modes, convert_examples_to_features, convert_examples_to_features_phrase, compute_metrics
@@ -65,10 +65,9 @@ def main():
                         type=str,
                         required=True,
                         help="The pretrained para on SST-phrase.")
-    parser.add_argument("--bert_model", default=None, type=str, required=True,
-                        help="Bert pre-trained model selected in the list: bert-base-uncased, "
-                        "bert-large-uncased, bert-base-cased, bert-large-cased, bert-base-multilingual-uncased, "
-                        "bert-base-multilingual-cased, bert-base-chinese.")
+    parser.add_argument("--albert_model", default=None, type=str, required=True,
+                        help="Albert pre-trained model selected in the list: albert-base-v2, "
+                        "albert-large-v2, albert-xlarge-v2.")
     parser.add_argument("--task_name",
                         default=None,
                         type=str,
@@ -82,9 +81,9 @@ def main():
 
     ## Other parameters
     parser.add_argument("--para",
-                        default="sentibert",
+                        default="sentialbert",
                         type=str,
-                        help="The choice of pre-trained parameters (BERT ot SentiBERT).")
+                        help="The choice of pre-trained parameters (ALBERT ot SentiALBERT).")
     parser.add_argument("--domain",
                         default="joy",
                         type=str,
@@ -223,18 +222,18 @@ def main():
     if args.local_rank not in [-1, 0]:
         torch.distributed.barrier()  # Make sure only the first process in distributed training will download model & vocab
 
-    tokenizer = BertTokenizer.from_pretrained(args.bert_model, do_lower_case=args.do_lower_case)
+    tokenizer = FullTokenizer.from_pretrained(args.albert_model, do_lower_case=args.do_lower_case)
     
     if task_name == "sstphrase" or task_name == "sst-3":
-        if args.para == "sentibert":
-            model = BertForPhraseClassification.from_pretrained(args.pretrain_dir, num_labels=num_labels)
+        if args.para == "sentialbert":
+            model = AlbertForPhraseClassification.from_pretrained(args.pretrain_dir, num_labels=num_labels)
         else:
-            model = BertForPhraseClassification.from_pretrained(args.bert_model, num_labels=num_labels)
+            model = AlbertForPhraseClassification.from_pretrained(args.albert_model, num_labels=num_labels)
     else:
-        if args.para == "sentibert":
-            model = BertForSequenceClassification.from_pretrained(args.pretrain_dir, num_labels=num_labels)
+        if args.para == "sentialbert":
+            model = AlbertForSequenceClassification.from_pretrained(args.pretrain_dir, num_labels=num_labels)
         else:
-            model = BertForSequenceClassification.from_pretrained(args.bert_model, num_labels=num_labels)
+            model = AlbertForSequenceClassification.from_pretrained(args.albert_model, num_labels=num_labels)
 
     if args.local_rank == 0:
         torch.distributed.barrier()
@@ -259,7 +258,7 @@ def main():
             tb_writer = SummaryWriter()
             
         cached_train_features_file = os.path.join(args.data_dir, 'train_{0}_{1}_{2}'.format(
-            list(filter(None, args.bert_model.split('/'))).pop(),
+            list(filter(None, args.albert_model.split('/'))).pop(),
                         str(args.max_seq_length),
                         str(task_name)))
 
@@ -316,7 +315,7 @@ def main():
         if task_name == "sstphrase" or task_name == "sst-3":
             train_data = TensorDataset(all_input_ids, all_input_mask, all_phrase_mask, all_segment_ids, all_label_ids, all_span, all_span_3)
         else:
-            if (task_name == "sst-2" or task_name == "twitter" or task_name == "emocontext" or task_name == "emoint") and args.para == "sentibert":
+            if (task_name == "sst-2" or task_name == "twitter" or task_name == "emocontext" or task_name == "emoint") and args.para == "sentialbert":
                 train_data = TensorDataset(all_input_ids, all_input_mask, all_segment_ids, all_label_ids, all_span, all_span_3)
             else:
                 train_data = TensorDataset(all_input_ids, all_input_mask, all_segment_ids, all_label_ids)
@@ -376,7 +375,7 @@ def main():
                     input_ids, input_mask, phrase_mask, segment_ids, label_ids, span, span_3 = batch
                     logits, loss = model(input_ids, token_type_ids=segment_ids, attention_mask=input_mask, phrase_mask=phrase_mask, graph_label=label_ids, span=span, span_3=span_3)
                 else:
-                    if (task_name == "sst-2" or task_name == "twitter" or task_name == "emocontext" or task_name == "emoint") and args.para == "sentibert":
+                    if (task_name == "sst-2" or task_name == "twitter" or task_name == "emocontext" or task_name == "emoint") and args.para == "sentialbert":
                         input_ids, input_mask, segment_ids, label_ids, span, span_3 = batch
                         logits, loss = model(input_ids, token_type_ids=segment_ids, attention_mask=input_mask, labels=label_ids, span=span, span_3=span_3)
                     else:
@@ -423,7 +422,7 @@ def main():
 
     ### Saving best-practices: if you use defaults names for the model, you can reload it using from_pretrained()
     ### Example:
-    tokenizer = BertTokenizer.from_pretrained(args.bert_model, do_lower_case=args.do_lower_case)
+    tokenizer = FullTokenizer.from_pretrained(args.albert_model, do_lower_case=args.do_lower_case)
     finetuned_model_name = [WEIGHTS_NAME_SAVE, CONFIG_NAME_SAVE]
     
     if args.do_train and (args.local_rank == -1 or torch.distributed.get_rank() == 0):
@@ -440,24 +439,24 @@ def main():
         # Load a trained model and vocabulary that you have fine-tuned
         
         if task_name == "sstphrase" or task_name == "sst-3":
-            model = BertForPhraseClassification.from_pretrained(args.output_dir, finetuned_model_name, num_labels=num_labels)
+            model = AlbertForPhraseClassification.from_pretrained(args.output_dir, finetuned_model_name, num_labels=num_labels)
         else:
-            model = BertForSequenceClassification.from_pretrained(args.output_dir, finetuned_model_name, num_labels=num_labels)
+            model = AlbertForSequenceClassification.from_pretrained(args.output_dir, finetuned_model_name, num_labels=num_labels)
 
         # Good practice: save your training arguments together with the trained model
         output_args_file = os.path.join(args.output_dir, 'training_args.bin')
         torch.save(args, output_args_file)
     else:
         if task_name == "sstphrase" or task_name == "sst-3":
-            model = BertForPhraseClassification.from_pretrained(args.output_dir, finetuned_model_name, num_labels=num_labels)
+            model = AlbertForPhraseClassification.from_pretrained(args.output_dir, finetuned_model_name, num_labels=num_labels)
         else:
-            model = BertForSequenceClassification.from_pretrained(args.output_dir, finetuned_model_name, num_labels=num_labels)
+            model = AlbertForSequenceClassification.from_pretrained(args.output_dir, finetuned_model_name, num_labels=num_labels)
 
     model.to(device)
     ### Evaluation ###
 
     cached_eval_features_file = os.path.join(args.data_dir, 'dev_{0}_{1}_{2}'.format(
-            list(filter(None, args.bert_model.split('/'))).pop(),
+            list(filter(None, args.albert_model.split('/'))).pop(),
                         str(args.max_seq_length),
                         str(task_name)))
     
@@ -518,7 +517,7 @@ def main():
         if task_name == "sstphrase" or task_name == "sst-3":
             eval_data = TensorDataset(all_input_ids, all_input_mask, all_phrase_mask, all_segment_ids, all_label_ids, all_span, all_span_3)
         else:
-            if (task_name == "sst-2" or task_name == "twitter" or task_name == "emocontext" or task_name == "emoint") and args.para == "sentibert":
+            if (task_name == "sst-2" or task_name == "twitter" or task_name == "emocontext" or task_name == "emoint") and args.para == "sentialbert":
                 eval_data = TensorDataset(all_input_ids, all_input_mask, all_segment_ids, all_label_ids, all_span, all_span_3)
             else:
                 eval_data = TensorDataset(all_input_ids, all_input_mask, all_segment_ids, all_label_ids)
@@ -567,7 +566,7 @@ def main():
                     out_label_ids = np.append(
                         out_label_ids, label_ids.detach().cpu().numpy(), axis=0)
         else:
-            if (task_name == "sst-2" or task_name == "twitter" or task_name == "emocontext" or task_name == "emoint") and args.para == "sentibert":
+            if (task_name == "sst-2" or task_name == "twitter" or task_name == "emocontext" or task_name == "emoint") and args.para == "sentialbert":
                 for input_ids, input_mask, segment_ids, label_ids, span, span_3 in tqdm(eval_dataloader, desc="Evaluating"):
                     input_ids = input_ids.to(device)
                     input_mask = input_mask.to(device)
