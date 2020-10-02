@@ -1,14 +1,14 @@
 __version__ = "0.6.2"
-from .tokenization import BertTokenizer, BasicTokenizer, WordpieceTokenizer
+from .tokenization import FullTokenizer, BasicTokenizer, WordpieceTokenizer
 from .tokenization_openai import OpenAIGPTTokenizer
 from .tokenization_transfo_xl import (TransfoXLTokenizer, TransfoXLCorpus)
 from .tokenization_gpt2 import GPT2Tokenizer
 
-from .modeling_new import (BertConfig, BertModel, BertForPreTraining,
-                       BertForMaskedLM, BertForNextSentencePrediction,
-                       BertForSequenceClassification, BertForPhraseClassification, BertForMultipleChoice,
-                       BertForTokenClassification, BertForQuestionAnswering,
-                       load_tf_weights_in_bert)
+from .modeling_new import (AlbertConfig, AlbertModel, AlbertForPreTraining,
+                       AlbertForMaskedLM, AlbertForNextSentencePrediction,
+                      AlbertForSequenceClassification, AlbertForPhraseClassification, AlbertForMultipleChoice,
+                       AlbertForTokenClassification, AlbertForQuestionAnswering,
+                       load_tf_weights_in_albert)
 '''from .modeling_openai import (OpenAIGPTConfig, OpenAIGPTModel,
                               OpenAIGPTLMHeadModel, OpenAIGPTDoubleHeadsModel,
                               load_tf_weights_in_openai_gpt)
