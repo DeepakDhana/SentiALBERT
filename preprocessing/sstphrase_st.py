@@ -1,11 +1,11 @@
 # coding=utf-8
-from pytorch_pretrained_bert.tokenization import BertTokenizer
+from pytorch_pretrained_bert.tokenization import FullTokenizer
 import numpy as np
 import pickle as pkl
 import argparse
 import os
 
-tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
+tokenizer = FullTokenizer.from_pretrained("albert-base-v2")
 
 def toTree(expression): 
     count = 0
