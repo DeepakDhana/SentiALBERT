@@ -21,51 +21,85 @@ import logging
 import os
 import unicodedata
 from io import open
+import six
 
 from .file_utils import cached_path
 
 logger = logging.getLogger(__name__)
 
 PRETRAINED_VOCAB_ARCHIVE_MAP = {
-    'bert-base-uncased': "https://s3.amazonaws.com/models.huggingface.co/bert/bert-base-uncased-vocab.txt",
-    'bert-large-uncased': "https://s3.amazonaws.com/models.huggingface.co/bert/bert-large-uncased-vocab.txt",
-    'bert-base-cased': "https://s3.amazonaws.com/models.huggingface.co/bert/bert-base-cased-vocab.txt",
-    'bert-large-cased': "https://s3.amazonaws.com/models.huggingface.co/bert/bert-large-cased-vocab.txt",
-    'bert-base-multilingual-uncased': "https://s3.amazonaws.com/models.huggingface.co/bert/bert-base-multilingual-uncased-vocab.txt",
-    'bert-base-multilingual-cased': "https://s3.amazonaws.com/models.huggingface.co/bert/bert-base-multilingual-cased-vocab.txt",
-    'bert-base-chinese': "https://s3.amazonaws.com/models.huggingface.co/bert/bert-base-chinese-vocab.txt",
-    'bert-base-german-cased': "https://int-deepset-models-bert.s3.eu-central-1.amazonaws.com/pytorch/bert-base-german-cased-vocab.txt",
-    'bert-large-uncased-whole-word-masking': "https://s3.amazonaws.com/models.huggingface.co/bert/bert-large-uncased-whole-word-masking-vocab.txt",
-    'bert-large-cased-whole-word-masking': "https://s3.amazonaws.com/models.huggingface.co/bert/bert-large-cased-whole-word-masking-vocab.txt",
-    'bert-large-uncased-whole-word-masking-finetuned-squad': "https://s3.amazonaws.com/models.huggingface.co/bert/bert-large-uncased-whole-word-masking-finetuned-squad-vocab.txt",
-    'bert-large-cased-whole-word-masking-finetuned-squad': "https://s3.amazonaws.com/models.huggingface.co/bert/bert-large-cased-whole-word-masking-finetuned-squad-vocab.txt",
-    'bert-base-cased-finetuned-mrpc': "https://s3.amazonaws.com/models.huggingface.co/bert/bert-base-cased-finetuned-mrpc-vocab.txt",
+    "albert-base-v1": "https://s3.amazonaws.com/models.huggingface.co/bert/albert-base-v1-spiece.model",
+    "albert-large-v1": "https://s3.amazonaws.com/models.huggingface.co/bert/albert-large-v1-spiece.model",
+    "albert-xlarge-v1": "https://s3.amazonaws.com/models.huggingface.co/bert/albert-xlarge-v1-spiece.model",
+    "albert-xxlarge-v1": "https://s3.amazonaws.com/models.huggingface.co/bert/albert-xxlarge-v1-spiece.model",
+    "albert-base-v2": "https://s3.amazonaws.com/models.huggingface.co/bert/albert-base-v2-spiece.model",
+    "albert-large-v2": "https://s3.amazonaws.com/models.huggingface.co/bert/albert-large-v2-spiece.model",
+    "albert-xlarge-v2": "https://s3.amazonaws.com/models.huggingface.co/bert/albert-xlarge-v2-spiece.model",
+    "albert-xxlarge-v2": "https://s3.amazonaws.com/models.huggingface.co/bert/albert-xxlarge-v2-spiece.model",
 }
 PRETRAINED_VOCAB_POSITIONAL_EMBEDDINGS_SIZE_MAP = {
-    'bert-base-uncased': 512,
-    'bert-large-uncased': 512,
-    'bert-base-cased': 512,
-    'bert-large-cased': 512,
-    'bert-base-multilingual-uncased': 512,
-    'bert-base-multilingual-cased': 512,
-    'bert-base-chinese': 512,
-    'bert-base-german-cased': 512,
-    'bert-large-uncased-whole-word-masking': 512,
-    'bert-large-cased-whole-word-masking': 512,
-    'bert-large-uncased-whole-word-masking-finetuned-squad': 512,
-    'bert-large-cased-whole-word-masking-finetuned-squad': 512,
-    'bert-base-cased-finetuned-mrpc': 512,
+    "albert-base-v1": 512,
+    "albert-large-v1": 512,
+    "albert-xlarge-v1": 512,
+    "albert-xxlarge-v1": 512,
+    "albert-base-v2": 512,
+    "albert-large-v2": 512,
+    "albert-xlarge-v2": 512,
+    "albert-xxlarge-v2": 512,
 }
 VOCAB_NAME = 'vocab.txt'
+
+
+def convert_to_unicode(text):
+    """Converts `text` to Unicode (if it's not already), assuming utf-8 input."""
+    if six.PY3:
+        if isinstance(text, str):
+            return text
+        elif isinstance(text, bytes):
+            return text.decode("utf-8", "ignore")
+        else:
+            raise ValueError("Unsupported string type: %s" % (type(text)))
+    elif six.PY2:
+        if isinstance(text, str):
+            return text.decode("utf-8", "ignore")
+        elif isinstance(text, unicode):
+            return text
+        else:
+            raise ValueError("Unsupported string type: %s" % (type(text)))
+    else:
+        raise ValueError("Not running on Python2 or Python 3?")
+
+
+def printable_text(text):
+    """Returns text encoded in a way suitable for print or `tf.logging`."""
+
+    # These functions want `str` for both Python2 and Python3, but in one case
+    # it's a Unicode string and in the other it's a byte string.
+    if six.PY3:
+        if isinstance(text, str):
+            return text
+        elif isinstance(text, bytes):
+            return text.decode("utf-8", "ignore")
+        else:
+            raise ValueError("Unsupported string type: %s" % (type(text)))
+    elif six.PY2:
+        if isinstance(text, str):
+            return text
+        elif isinstance(text, unicode):
+            return text.encode("utf-8")
+        else:
+            raise ValueError("Unsupported string type: %s" % (type(text)))
+    else:
+        raise ValueError("Not running on Python2 or Python 3?")
 
 
 def load_vocab(vocab_file):
     """Loads a vocabulary file into a dictionary."""
     vocab = collections.OrderedDict()
     index = 0
-    with open(vocab_file, "r", encoding="utf-8") as reader:
+    with open(vocab_file, "r", encoding='ISO-8859-1') as reader:
         while True:
-            token = reader.readline()
+            token = convert_to_unicode(reader.readline())
             if not token:
                 break
             token = token.strip()
@@ -74,8 +108,28 @@ def load_vocab(vocab_file):
     return vocab
 
 
+def convert_tokens_to_ids(vocab, tokens):
+    """Converts a sequence of tokens into ids using the vocab."""
+    ids = []
+    for token in tokens:
+        ids.append(vocab[token])
+    if len(ids) > self.max_len:
+            logger.warning(
+                "Token indices sequence length is longer than the specified maximum "
+                " sequence length for this BERT model ({} > {}). Running this"
+                " sequence through BERT will result in indexing errors".format(len(ids), self.max_len)
+            )
+    return ids
+
+def convert_ids_to_tokens(vocab, ids):
+    """Converts a sequence of id into tokens using the vocab."""
+    tokens = []
+    for id in ids:
+        tokens.append(vocab[id])
+    return tokens
+
 def whitespace_tokenize(text):
-    """Runs basic whitespace cleaning and splitting on a piece of text."""
+    """Runs basic whitespace cleaning and splitting on a peice of text."""
     text = text.strip()
     if not text:
         return []
@@ -83,84 +137,29 @@ def whitespace_tokenize(text):
     return tokens
 
 
-class BertTokenizer(object):
-    """Runs end-to-end tokenization: punctuation splitting + wordpiece"""
+class FullTokenizer(object):
+    """Runs end-to-end tokenziation."""
 
-    def __init__(self, vocab_file, do_lower_case=True, max_len=None, do_basic_tokenize=True,
-                 never_split=("[UNK]", "[SEP]", "[PAD]", "[CLS]", "[MASK]")):
-        """Constructs a BertTokenizer.
-
-        Args:
-          vocab_file: Path to a one-wordpiece-per-line vocabulary file
-          do_lower_case: Whether to lower case the input
-                         Only has an effect when do_wordpiece_only=False
-          do_basic_tokenize: Whether to do basic tokenization before wordpiece.
-          max_len: An artificial maximum length to truncate tokenized sequences to;
-                         Effective maximum length is always the minimum of this
-                         value (if specified) and the underlying BERT model's
-                         sequence length.
-          never_split: List of tokens which will never be split during tokenization.
-                         Only has an effect when do_wordpiece_only=False
-        """
-        if not os.path.isfile(vocab_file):
-            raise ValueError(
-                "Can't find a vocabulary file at path '{}'. To load the vocabulary from a Google pretrained "
-                "model use `tokenizer = BertTokenizer.from_pretrained(PRETRAINED_MODEL_NAME)`".format(vocab_file))
+    def __init__(self, vocab_file, do_lower_case=True, max_len=None,never_split=("[UNK]", "[SEP]", "[PAD]", "[CLS]", "[MASK]")):
         self.vocab = load_vocab(vocab_file)
-        self.ids_to_tokens = collections.OrderedDict(
-            [(ids, tok) for tok, ids in self.vocab.items()])
-        self.do_basic_tokenize = do_basic_tokenize
-        if do_basic_tokenize:
-          self.basic_tokenizer = BasicTokenizer(do_lower_case=do_lower_case,
-                                                never_split=never_split)
+        self.basic_tokenizer = BasicTokenizer(do_lower_case=do_lower_case, never_split=never_split)
         self.wordpiece_tokenizer = WordpieceTokenizer(vocab=self.vocab)
         self.max_len = max_len if max_len is not None else int(1e12)
 
     def tokenize(self, text):
         split_tokens = []
-        if self.do_basic_tokenize:
-            for token in self.basic_tokenizer.tokenize(text):
-                for sub_token in self.wordpiece_tokenizer.tokenize(token):
-                    split_tokens.append(sub_token)
-        else:
-            split_tokens = self.wordpiece_tokenizer.tokenize(text)
+        for token in self.basic_tokenizer.tokenize(text):
+            for sub_token in self.wordpiece_tokenizer.tokenize(token):
+                split_tokens.append(sub_token)
+
         return split_tokens
 
     def convert_tokens_to_ids(self, tokens):
-        """Converts a sequence of tokens into ids using the vocab."""
-        ids = []
-        for token in tokens:
-            ids.append(self.vocab[token])
-        if len(ids) > self.max_len:
-            logger.warning(
-                "Token indices sequence length is longer than the specified maximum "
-                " sequence length for this BERT model ({} > {}). Running this"
-                " sequence through BERT will result in indexing errors".format(len(ids), self.max_len)
-            )
-        return ids
+        return convert_tokens_to_ids(self.vocab, tokens)
 
-    def convert_ids_to_tokens(self, ids):
-        """Converts a sequence of ids in wordpiece tokens using the vocab."""
-        tokens = []
-        for i in ids:
-            tokens.append(self.ids_to_tokens[i])
-        return tokens
-
-    def save_vocabulary(self, vocab_path):
-        """Save the tokenizer vocabulary to a directory or file."""
-        index = 0
-        if os.path.isdir(vocab_path):
-            vocab_file = os.path.join(vocab_path, VOCAB_NAME)
-        with open(vocab_file, "w", encoding="utf-8") as writer:
-            for token, token_index in sorted(self.vocab.items(), key=lambda kv: kv[1]):
-                if index != token_index:
-                    logger.warning("Saving vocabulary to {}: vocabulary indices are not consecutive."
-                                   " Please check that the vocabulary is not corrupted!".format(vocab_file))
-                    index = token_index
-                writer.write(token + u'\n')
-                index += 1
-        return vocab_file
-
+    def convert_to_unicode(self, text):
+        return convert_to_unicode(text)
+        
     @classmethod
     def from_pretrained(cls, pretrained_model_name_or_path, cache_dir=None, *inputs, **kwargs):
         """
@@ -218,11 +217,8 @@ class BertTokenizer(object):
 class BasicTokenizer(object):
     """Runs basic tokenization (punctuation splitting, lower casing, etc.)."""
 
-    def __init__(self,
-                 do_lower_case=True,
-                 never_split=("[UNK]", "[SEP]", "[PAD]", "[CLS]", "[MASK]")):
+    def __init__(self, do_lower_case=True,never_split=("[UNK]", "[SEP]", "[PAD]", "[CLS]", "[MASK]")):
         """Constructs a BasicTokenizer.
-
         Args:
           do_lower_case: Whether to lower case the input.
         """
@@ -231,14 +227,8 @@ class BasicTokenizer(object):
 
     def tokenize(self, text):
         """Tokenizes a piece of text."""
+        text = convert_to_unicode(text)
         text = self._clean_text(text)
-        # This was added on November 1st, 2018 for the multilingual and Chinese
-        # models. This is also applied to the English models now, but it doesn't
-        # matter since the English models were not trained on any Chinese data
-        # and generally don't have any Chinese data in them (there are Chinese
-        # characters in the vocabulary because Wikipedia does have some Chinese
-        # words in the English Wikipedia.).
-        text = self._tokenize_chinese_chars(text)
         orig_tokens = whitespace_tokenize(text)
         split_tokens = []
         for token in orig_tokens:
@@ -283,41 +273,6 @@ class BasicTokenizer(object):
 
         return ["".join(x) for x in output]
 
-    def _tokenize_chinese_chars(self, text):
-        """Adds whitespace around any CJK character."""
-        output = []
-        for char in text:
-            cp = ord(char)
-            if self._is_chinese_char(cp):
-                output.append(" ")
-                output.append(char)
-                output.append(" ")
-            else:
-                output.append(char)
-        return "".join(output)
-
-    def _is_chinese_char(self, cp):
-        """Checks whether CP is the codepoint of a CJK character."""
-        # This defines a "chinese character" as anything in the CJK Unicode block:
-        #   https://en.wikipedia.org/wiki/CJK_Unified_Ideographs_(Unicode_block)
-        #
-        # Note that the CJK Unicode block is NOT all Japanese and Korean characters,
-        # despite its name. The modern Korean Hangul alphabet is a different block,
-        # as is Japanese Hiragana and Katakana. Those alphabets are used to write
-        # space-separated words, so they are not treated specially and handled
-        # like the all of the other languages.
-        if ((cp >= 0x4E00 and cp <= 0x9FFF) or  #
-                (cp >= 0x3400 and cp <= 0x4DBF) or  #
-                (cp >= 0x20000 and cp <= 0x2A6DF) or  #
-                (cp >= 0x2A700 and cp <= 0x2B73F) or  #
-                (cp >= 0x2B740 and cp <= 0x2B81F) or  #
-                (cp >= 0x2B820 and cp <= 0x2CEAF) or
-                (cp >= 0xF900 and cp <= 0xFAFF) or  #
-                (cp >= 0x2F800 and cp <= 0x2FA1F)):  #
-            return True
-
-        return False
-
     def _clean_text(self, text):
         """Performs invalid character removal and whitespace cleanup on text."""
         output = []
@@ -342,21 +297,19 @@ class WordpieceTokenizer(object):
 
     def tokenize(self, text):
         """Tokenizes a piece of text into its word pieces.
-
         This uses a greedy longest-match-first algorithm to perform tokenization
         using the given vocabulary.
-
         For example:
           input = "unaffable"
           output = ["un", "##aff", "##able"]
-
         Args:
           text: A single token or whitespace separated tokens. This should have
-            already been passed through `BasicTokenizer`.
-
+            already been passed through `BasicTokenizer.
         Returns:
           A list of wordpiece tokens.
         """
+
+        text = convert_to_unicode(text)
 
         output_tokens = []
         for token in whitespace_tokenize(text):
@@ -429,4 +382,6 @@ def _is_punctuation(char):
     cat = unicodedata.category(char)
     if cat.startswith("P"):
         return True
-    return False
+    return False 
+
+    
