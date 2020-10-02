@@ -14,8 +14,8 @@ from torch.utils.data import DataLoader, Dataset, RandomSampler
 from torch.utils.data.distributed import DistributedSampler
 from tqdm import tqdm
 
-from pytorch_pretrained_bert.modeling_new import BertForPreTraining
-from pytorch_pretrained_bert.tokenization import BertTokenizer
+from pytorch_pretrained_bert.modeling_new import AlbertForPreTraining
+from pytorch_pretrained_bert.tokenization import FullTokenizer
 from pytorch_pretrained_bert.optimization import BertAdam, WarmupLinearSchedule
 
 InputFeatures = namedtuple("InputFeatures", "input_ids input_mask phrase_mask segment_ids lm_label_ids is_next graph_label span span_3")
@@ -177,8 +177,8 @@ def main():
     parser = ArgumentParser()
     parser.add_argument('--pregenerated_data', type=Path, required=True)
     parser.add_argument('--output_dir', type=Path, required=True)
-    parser.add_argument("--bert_model", type=str, required=True, help="Bert pre-trained model selected in the list: bert-base-uncased, "
-                             "bert-large-uncased, bert-base-cased, bert-base-multilingual, bert-base-chinese.")
+    parser.add_argument("--albert_model", type=str, required=True, help="Albert pre-trained model selected in the list: albert-base-v2, "
+                             "albert-large-v2, albert-xlarge-v2.")
     parser.add_argument("--do_lower_case", action="store_true")
     parser.add_argument("--reduce_memory", action="store_true",
                         help="Store training data as on-disc memmaps to massively reduce memory usage")
@@ -269,7 +269,7 @@ def main():
         logging.warning(f"Output directory ({args.output_dir}) already exists and is not empty!")'''
     args.output_dir.mkdir(parents=True, exist_ok=True)
 
-    tokenizer = BertTokenizer.from_pretrained(args.bert_model, do_lower_case=args.do_lower_case)
+    tokenizer = FullTokenizer.from_pretrained(args.albert_model, do_lower_case=args.do_lower_case)
 
     total_train_examples = 0
     for i in range(args.epochs):
@@ -282,7 +282,7 @@ def main():
         num_train_optimization_steps = num_train_optimization_steps // torch.distributed.get_world_size()
 
     # Prepare model
-    model = BertForPreTraining.from_pretrained(args.bert_model)
+    model = AlbertForPreTraining.from_pretrained(args.albert_model)
     if args.fp16:
         model.half()
     model.to(device)
