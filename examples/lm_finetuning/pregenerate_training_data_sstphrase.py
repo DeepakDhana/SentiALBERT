@@ -6,7 +6,7 @@ import shelve
 
 import random
 # from random import random, randrange, randint, shuffle, choice
-from pytorch_pretrained_bert.tokenization import BertTokenizer
+from pytorch_pretrained_bert import FullTokenizer
 import numpy as np
 import json
 import collections
@@ -16,7 +16,7 @@ import os
 np.random.seed(11456)
 random.seed(11456)
 
-tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
+tokenizer = FullTokenizer.from_pretrained("albert-base-v2")
 
 class DocumentDatabase:
     def __init__(self, reduce_memory=False):
@@ -109,9 +109,12 @@ def truncate_seq_pair(tokens_a, tokens_b, max_num_tokens):
 MaskedLmInstance = collections.namedtuple("MaskedLmInstance",
                                           ["index", "label"])
 
-def create_masked_lm_predictions(tokens, masked_lm_prob, max_predictions_per_seq, whole_word_mask, vocab_list, sentiword):
+def create_masked_lm_predictions(tokens, max_ngram, masked_lm_prob, max_predictions_per_seq, whole_word_mask, vocab_list, sentiword):
     """Creates the predictions for the masked LM objective. This is mostly copied from the Google BERT repo, but
     with several refactors to clean it up and remove a lot of unnecessary variables."""
+    ngrams = np.arange(1, max_ngram + 1, dtype=np.int64)
+    pvals = 1. / np.arange(1, max_ngram + 1)
+    pvals /= pvals.sum(keepdims=True)  # p(n) = 1/n / sigma(1/k)
     cand_indices = []
     for (i, token) in enumerate(tokens):
         if token == "[CLS]" or token == "[SEP]":
@@ -125,10 +128,7 @@ def create_masked_lm_predictions(tokens, masked_lm_prob, max_predictions_per_seq
         # Note that Whole Word Masking does *not* change the training code
         # at all -- we still predict each WordPiece independently, softmaxed
         # over the entire vocabulary.
-        if (whole_word_mask and len(cand_indices) >= 1 and token.startswith("##")):
-            cand_indices[-1].append(i)
-        else:
-            cand_indices.append([i])
+        cand_indices.append([i])
 
     num_to_mask = min(max_predictions_per_seq,
                       max(1, int(round(len(tokens) * masked_lm_prob))))
@@ -136,20 +136,16 @@ def create_masked_lm_predictions(tokens, masked_lm_prob, max_predictions_per_seq
     masked_lms = []
     covered_indexes = set()
     for index_set in cand_indices:
+        n = np.random.choice(ngrams, p=pvals)
         if len(masked_lms) >= num_to_mask:
             break
         # If adding a whole-word mask would exceed the maximum number of
         # predictions, then just skip this candidate.
         if len(masked_lms) + len(index_set) > num_to_mask:
             continue
-        is_any_index_covered = False
-        for index in index_set:
-            if index in covered_indexes:
-                is_any_index_covered = True
-                break
-        if is_any_index_covered:
+        if index in covered_indexes:
             continue
-        
+                
         word = ""
         for index in index_set:
             if tokens[index].startswith("##"):
@@ -159,40 +155,44 @@ def create_masked_lm_predictions(tokens, masked_lm_prob, max_predictions_per_seq
                 
         if word in sentiword:
             if random.random() < 0.2:
-                for index in index_set:
-                    covered_indexes.add(index)
-        
-                    masked_token = None
-                    # 80% of the time, replace with [MASK]
-                    if random.random() < 0.8:
-                        masked_token = "[MASK]"
+                if index < len(cand_indices) - (n - 1):
+            for i in range(n):
+                ind = index + i
+                if ind in covered_indices:
+                    continue
+                covered_indices.add(ind)
+                # 80% of the time, replace with [MASK]
+                if random.random() < 0.8:
+                    masked_token = "[MASK]"
+                else:
+                    # 10% of the time, keep original
+                    if random.random() < 0.5:
+                        masked_token = tokens[ind]
+                    # 10% of the time, replace with random word
                     else:
-                        # 10% of the time, keep original
-                        if random.random() < 0.5:
-                            masked_token = tokens[index]
-                        # 10% of the time, replace with random word
-                        else:
-                            masked_token = random.choice(vocab_list)
-                    masked_lms.append(MaskedLmInstance(index=index, label=tokens[index]))
-                    tokens[index] = masked_token
+                        masked_token = random.choice(vocab_list)
+                masked_token_labels.append(MaskedLmInstance(index=ind, label=tokens[ind]))
+                tokens[ind] = masked_token
         else:
             if random.random() < 0.15:
-                for index in index_set:
-                    covered_indexes.add(index)
-        
-                    masked_token = None
-                    # 80% of the time, replace with [MASK]
-                    if random.random() < 0.8:
-                        masked_token = "[MASK]"
+                if index < len(cand_indices) - (n - 1):
+            for i in range(n):
+                ind = index + i
+                if ind in covered_indices:
+                    continue
+                covered_indices.add(ind)
+                # 80% of the time, replace with [MASK]
+                if random.random() < 0.8:
+                    masked_token = "[MASK]"
+                else:
+                    # 10% of the time, keep original
+                    if random.random() < 0.5:
+                        masked_token = tokens[ind]
+                    # 10% of the time, replace with random word
                     else:
-                        # 10% of the time, keep original
-                        if random.random() < 0.5:
-                            masked_token = tokens[index]
-                        # 10% of the time, replace with random word
-                        else:
-                            masked_token = random.choice(vocab_list)
-                    masked_lms.append(MaskedLmInstance(index=index, label=tokens[index]))
-                    tokens[index] = masked_token
+                        masked_token = random.choice(vocab_list)
+                masked_token_labels.append(MaskedLmInstance(index=ind, label=tokens[ind]))
+                tokens[ind] = masked_token
             
 
     assert len(masked_lms) <= num_to_mask
@@ -308,7 +308,7 @@ def merge_span(span_a, tokens_a):
     return span_a, True
 
 def create_instances_from_document(
-        doc_database, doc_idx, max_seq_length, short_seq_prob,
+        doc_database, doc_idx, max_seq_length, short_seq_prob, max_ngram, 
         masked_lm_prob, max_predictions_per_seq, whole_word_mask, vocab_list, doc_total, graph_label, span, span_3, preprocessed, sentiword):
     """This code is mostly a duplicate of the equivalent function from Google BERT's repo.
     However, we make some changes and improvements. Sampling is improved and no longer requires a loop in this function.
@@ -354,6 +354,7 @@ def create_instances_from_document(
                     a_end = j
     
                     tokens_a = []
+                    tokens_b = []
                     tokens_a_len = []
                     graph_label_a = []
                     len_a = 0
@@ -381,9 +382,24 @@ def create_instances_from_document(
                         span_a = span[doc_total[sen_tmp]]
                         span_a_3 = span_3[doc_total[sen_tmp]]
                     
+                    for k in range(1, len(current_chunk):
+                        tokens_b.extend(currernt_chunk[k])
+                        
+                    
+                                        
                     len_cur = 0
                     max_rc = max_len
-                    is_random_next = True
+                    
+                    "Sentence order prediction"
+                    if len(tokens_a) == 0 or len(tokens_b) == 0: continue
+                    if random.random() < 0.5: 
+                        is_random_next = True
+                        temp = tokens_a
+                        tokens_a = tokens_b
+                        tokens_b = temp
+                    else:
+                        is_random_next = False
+                    truncate_seq_pair(tokens_a, tokens_b, max_num_tokens)
     
                     if flag == 0:
                         len_cur = 0
@@ -397,14 +413,15 @@ def create_instances_from_document(
                         graph_label_total += [-1] * (max_len - len(graph_label_total))
     
                         assert len(tokens_a) >= 1
+                        assert len(tokens_b) >= 1
     
-                        tokens = ["[CLS]"] + tokens_a + ["[SEP]"]
+                        tokens = ["[CLS]"] + tokens_a + ["[SEP]"] + tokens_b + ["[SEP]"]
                         # The segment IDs are 0 for the [CLS] token, the A tokens and the first [SEP]
                         # They are 1 for the B tokens and the final [SEP]
-                        segment_ids = [0 for _ in range(len(tokens_a) + 2)]
+                        segment_ids = [0 for _ in range(len(tokens_a) + 2) + [1 for _in range(len(tokens_b)+1]
     
                         tokens, masked_lm_positions, masked_lm_labels = create_masked_lm_predictions(
-                            tokens, masked_lm_prob, max_predictions_per_seq, whole_word_mask, vocab_list, sentiword)
+                            tokens, max_ngram, masked_lm_prob, max_predictions_per_seq, whole_word_mask, vocab_list, sentiword)
     
                         instance = {
                             "tokens": tokens,
@@ -501,9 +518,9 @@ def main():
     parser.add_argument('--train_corpus', type=Path, required=True)
     parser.add_argument("--data_dir", type=Path, required=True)
     parser.add_argument("--output_dir", type=Path, required=True)
-    parser.add_argument("--bert_model", type=str, required=True,
-                        choices=["bert-base-uncased", "bert-large-uncased", "bert-base-cased",
-                                 "bert-base-multilingual-uncased", "bert-base-chinese", "bert-base-multilingual-cased"])
+    parser.add_argument("--albert_model", type=str, required=True,
+                        choices=["albert-base-v1", "albert-large-v1", "albert-xlarge-v1",
+                                 "albert-base-v2", "albert-large-v2", "albert-xlarge-v2"])
     parser.add_argument("--do_lower_case", action="store_true")
     parser.add_argument("--do_whole_word_mask", action="store_true",
                         help="Whether to use whole word masking rather than per-WordPiece masking.")
@@ -523,7 +540,7 @@ def main():
     args = parser.parse_args()
     
     preprocessed = True
-    tokenizer = BertTokenizer.from_pretrained(args.bert_model, do_lower_case=args.do_lower_case)
+    tokenizer = FullTokenizer.from_pretrained(args.albert_model, do_lower_case=args.do_lower_case)
     vocab_list = list(tokenizer.vocab.keys())
     span = np.load(os.path.join(args.data_dir, "sstphrase_train_span.npy"))
     span = span.tolist()
