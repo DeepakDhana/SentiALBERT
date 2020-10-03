@@ -382,7 +382,7 @@ def create_instances_from_document(
                         span_a = span[doc_total[sen_tmp]]
                         span_a_3 = span_3[doc_total[sen_tmp]]
                     
-                    for k in range(1, len(current_chunk):
+                    for k in range(1, len(current_chunk)):
                         tokens_b.extend(currernt_chunk[k])
                         
                     
@@ -418,8 +418,7 @@ def create_instances_from_document(
                         tokens = ["[CLS]"] + tokens_a + ["[SEP]"] + tokens_b + ["[SEP]"]
                         # The segment IDs are 0 for the [CLS] token, the A tokens and the first [SEP]
                         # They are 1 for the B tokens and the final [SEP]
-                        segment_ids = [0 for _ in range(len(tokens_a) + 2) + [1 for _in range(len(tokens_b)+1]
-    
+                        segment_ids = [0 for _ in range(len(tokens_a) + 2)] + [1 for _ in range(len(tokens_b) + 1)] 
                         tokens, masked_lm_positions, masked_lm_labels = create_masked_lm_predictions(
                             tokens, max_ngram, masked_lm_prob, max_predictions_per_seq, whole_word_mask, vocab_list, sentiword)
     
