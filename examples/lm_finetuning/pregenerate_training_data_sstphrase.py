@@ -109,12 +109,9 @@ def truncate_seq_pair(tokens_a, tokens_b, max_num_tokens):
 MaskedLmInstance = collections.namedtuple("MaskedLmInstance",
                                           ["index", "label"])
 
-def create_masked_lm_predictions(tokens, max_ngram, masked_lm_prob, max_predictions_per_seq, whole_word_mask, vocab_list, sentiword):
+def create_masked_lm_predictions(tokens, masked_lm_prob, max_predictions_per_seq, whole_word_mask, vocab_list, sentiword):
     """Creates the predictions for the masked LM objective. This is mostly copied from the Google BERT repo, but
     with several refactors to clean it up and remove a lot of unnecessary variables."""
-    ngrams = np.arange(1, max_ngram + 1, dtype=np.int64)
-    pvals = 1. / np.arange(1, max_ngram + 1)
-    pvals /= pvals.sum(keepdims=True)  # p(n) = 1/n / sigma(1/k)
     cand_indices = []
     for (i, token) in enumerate(tokens):
         if token == "[CLS]" or token == "[SEP]":
@@ -128,7 +125,10 @@ def create_masked_lm_predictions(tokens, max_ngram, masked_lm_prob, max_predicti
         # Note that Whole Word Masking does *not* change the training code
         # at all -- we still predict each WordPiece independently, softmaxed
         # over the entire vocabulary.
-        cand_indices.append([i])
+        if (whole_word_mask and len(cand_indices) >= 1 and token.startswith("##")):
+            cand_indices[-1].append(i)
+        else:
+            cand_indices.append([i])
 
     num_to_mask = min(max_predictions_per_seq,
                       max(1, int(round(len(tokens) * masked_lm_prob))))
@@ -136,16 +136,20 @@ def create_masked_lm_predictions(tokens, max_ngram, masked_lm_prob, max_predicti
     masked_lms = []
     covered_indexes = set()
     for index_set in cand_indices:
-        n = np.random.choice(ngrams, p=pvals)
         if len(masked_lms) >= num_to_mask:
             break
         # If adding a whole-word mask would exceed the maximum number of
         # predictions, then just skip this candidate.
         if len(masked_lms) + len(index_set) > num_to_mask:
             continue
-        if index in covered_indexes:
+        is_any_index_covered = False
+        for index in index_set:
+            if index in covered_indexes:
+                is_any_index_covered = True
+                break
+        if is_any_index_covered:
             continue
-                
+        
         word = ""
         for index in index_set:
             if tokens[index].startswith("##"):
@@ -155,44 +159,40 @@ def create_masked_lm_predictions(tokens, max_ngram, masked_lm_prob, max_predicti
                 
         if word in sentiword:
             if random.random() < 0.2:
-                if index < len(cand_indices) - (n - 1):
-            for i in range(n):
-                ind = index + i
-                if ind in covered_indices:
-                    continue
-                covered_indices.add(ind)
-                # 80% of the time, replace with [MASK]
-                if random.random() < 0.8:
-                    masked_token = "[MASK]"
-                else:
-                    # 10% of the time, keep original
-                    if random.random() < 0.5:
-                        masked_token = tokens[ind]
-                    # 10% of the time, replace with random word
+                for index in index_set:
+                    covered_indexes.add(index)
+        
+                    masked_token = None
+                    # 80% of the time, replace with [MASK]
+                    if random.random() < 0.8:
+                        masked_token = "[MASK]"
                     else:
-                        masked_token = random.choice(vocab_list)
-                masked_token_labels.append(MaskedLmInstance(index=ind, label=tokens[ind]))
-                tokens[ind] = masked_token
+                        # 10% of the time, keep original
+                        if random.random() < 0.5:
+                            masked_token = tokens[index]
+                        # 10% of the time, replace with random word
+                        else:
+                            masked_token = random.choice(vocab_list)
+                    masked_lms.append(MaskedLmInstance(index=index, label=tokens[index]))
+                    tokens[index] = masked_token
         else:
             if random.random() < 0.15:
-                if index < len(cand_indices) - (n - 1):
-            for i in range(n):
-                ind = index + i
-                if ind in covered_indices:
-                    continue
-                covered_indices.add(ind)
-                # 80% of the time, replace with [MASK]
-                if random.random() < 0.8:
-                    masked_token = "[MASK]"
-                else:
-                    # 10% of the time, keep original
-                    if random.random() < 0.5:
-                        masked_token = tokens[ind]
-                    # 10% of the time, replace with random word
+                for index in index_set:
+                    covered_indexes.add(index)
+        
+                    masked_token = None
+                    # 80% of the time, replace with [MASK]
+                    if random.random() < 0.8:
+                        masked_token = "[MASK]"
                     else:
-                        masked_token = random.choice(vocab_list)
-                masked_token_labels.append(MaskedLmInstance(index=ind, label=tokens[ind]))
-                tokens[ind] = masked_token
+                        # 10% of the time, keep original
+                        if random.random() < 0.5:
+                            masked_token = tokens[index]
+                        # 10% of the time, replace with random word
+                        else:
+                            masked_token = random.choice(vocab_list)
+                    masked_lms.append(MaskedLmInstance(index=index, label=tokens[index]))
+                    tokens[index] = masked_token
             
 
     assert len(masked_lms) <= num_to_mask
@@ -308,7 +308,7 @@ def merge_span(span_a, tokens_a):
     return span_a, True
 
 def create_instances_from_document(
-        doc_database, doc_idx, max_seq_length, short_seq_prob, max_ngram, 
+        doc_database, doc_idx, max_seq_length, short_seq_prob,
         masked_lm_prob, max_predictions_per_seq, whole_word_mask, vocab_list, doc_total, graph_label, span, span_3, preprocessed, sentiword):
     """This code is mostly a duplicate of the equivalent function from Google BERT's repo.
     However, we make some changes and improvements. Sampling is improved and no longer requires a loop in this function.
