@@ -492,7 +492,7 @@ class AlbertGroup(nn.Module):
 class AlbertTransformer(nn.Module):
     def __init__(self, config):
         super(AlbertTransformer, self).__init__()
-        self.output_attentions = config.output_attentions
+        
         self.output_hidden_states = config.output_hidden_states
         self.num_hidden_layers = config.num_hidden_layers
         self.num_hidden_groups = config.num_hidden_groups
