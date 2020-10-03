@@ -315,13 +315,13 @@ class AlbertEmbeddings(nn.Module):
         return embeddings
 
 class AlbertSelfAttention(nn.Module):
-    def __init__(self, config):
+    def __init__(self, config, output_attentions=False):
         super(AlbertSelfAttention, self).__init__()
         if config.hidden_size % config.num_attention_heads != 0:
             raise ValueError(
                 "The hidden size (%d) is not a multiple of the number of attention "
                 "heads (%d)" % (config.hidden_size, config.num_attention_heads))
-        self.output_attentions = config.output_attentions
+        self.output_attentions = output_attentions
        
         
         self.num_attention_heads = config.num_attention_heads
@@ -371,7 +371,7 @@ class AlbertSelfAttention(nn.Module):
         context_layer = context_layer.permute(0, 2, 1, 3).contiguous()
         new_context_layer_shape = context_layer.size()[:-2] + (self.all_head_size,)
         context_layer = context_layer.view(*new_context_layer_shape)
-        outputs = (context_layer, attention_probs) if self.output_attentions else (context_layer,)
+        outputs = (attention_probs, context_layer) if self.output_attentions else (context_layer,)
         return outputs
 
 class AlbertSelfOutput(nn.Module):
@@ -385,8 +385,9 @@ class AlbertSelfOutput(nn.Module):
         return hidden_states
 
 class AlbertAttention(nn.Module):
-    def __init__(self, config):
+    def __init__(self, config, output_attentions=False):
         super(AlbertAttention, self).__init__()
+        
         self.self = AlbertSelfAttention(config)
         self.output = AlbertSelfOutput(config)
         self.pruned_heads = set()
@@ -490,9 +491,9 @@ class AlbertGroup(nn.Module):
         return (layer_hidden_states, layer_attentions)
 
 class AlbertTransformer(nn.Module):
-    def __init__(self, config):
+    def __init__(self, config, output_attentions=False):
         super(AlbertTransformer, self).__init__()
-        self.output_attentions = config.output_attentions
+        self.output_attentions = output_attentions
         self.output_hidden_states = config.output_hidden_states
         self.num_hidden_layers = config.num_hidden_layers
         self.num_hidden_groups = config.num_hidden_groups
