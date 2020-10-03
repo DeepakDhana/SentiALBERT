@@ -385,7 +385,7 @@ class AlbertSelfOutput(nn.Module):
         return hidden_states
 
 class AlbertAttention(nn.Module):
-    def __init__(self, config, output_attentions=False):
+    def __init__(self, config):
         super(AlbertAttention, self).__init__()
         
         self.self = AlbertSelfAttention(config)
@@ -491,10 +491,10 @@ class AlbertGroup(nn.Module):
         return (layer_hidden_states, layer_attentions)
 
 class AlbertTransformer(nn.Module):
-    def __init__(self, config, output_attentions=False):
+    def __init__(self, config, output_attentions=False, output_hidden_states=False):
         super(AlbertTransformer, self).__init__()
         self.output_attentions = output_attentions
-        self.output_hidden_states = config.output_hidden_states
+        self.output_hidden_states = output_hidden_states
         self.num_hidden_layers = config.num_hidden_layers
         self.num_hidden_groups = config.num_hidden_groups
         self.group = nn.ModuleList([AlbertGroup(config) for _ in range(config.num_hidden_groups)])
