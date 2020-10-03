@@ -942,11 +942,6 @@ class AlbertModel(AlbertPreTrainedModel):
         self.embeddings.word_embeddings = new_embeddings
         return self.embeddings.word_embeddings
     
-    def get_multihead_outputs(self):
-        """ Gather all multi-head outputs.
-            Return: list (layers) of multihead module outputs with gradients
-        """
-        return [layer.attention.self.multihead_output for layer in self.encoder.layer]
 
     def composition(self, encoded_layers, span_mask, span_mask_3, extended_span_mask, extended_span_mask_3):
         if span_mask is not None:
@@ -1024,16 +1019,15 @@ class AlbertModel(AlbertPreTrainedModel):
         
         sequence_output = encoded_layers[0]
         pooled_output = self.pooler(sequence_output)
-        encoded_layers = encoded_layerd[0]
         
         if span is not None:
-            graph_output = self.composition(encoded_outputs, span_mask, span_mask_3, 
+            graph_output = self.composition(encod_outputs, span_mask, span_mask_3, 
                                             extended_span_mask,
                                             extended_span_mask_3)
             
-            return encoded_layers, pooled_output, graph_output
+            return sequence_output, pooled_output, graph_output
         else:
-            return encoded_layers, pooled_output, encoded_layers
+            return sequence_output, pooled_output, encoded_layers
 
 
 class AlbertForPreTraining(AlbertPreTrainedModel):
