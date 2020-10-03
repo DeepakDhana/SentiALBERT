@@ -492,7 +492,7 @@ class AlbertGroup(nn.Module):
 class AlbertTransformer(nn.Module):
     def __init__(self, config):
         super(AlbertTransformer, self).__init__()
-        
+        self.output_attentions = config.output_attentions
         self.output_hidden_states = config.output_hidden_states
         self.num_hidden_layers = config.num_hidden_layers
         self.num_hidden_groups = config.num_hidden_groups
@@ -644,7 +644,7 @@ class AlbertPreTrainedModel(nn.Module):
     """ An abstract class to handle weights initialization and
         a simple interface for dowloading and loading pretrained models.
     """
-    def __init__(self, config, *inputs, **kwargs):
+    def __init__(self, config):
         super(AlbertPreTrainedModel, self).__init__()
         if not isinstance(config, AlbertConfig):
             raise ValueError(
@@ -669,7 +669,7 @@ class AlbertPreTrainedModel(nn.Module):
             module.bias.data.zero_()
 
     @classmethod
-    def from_pretrained(cls, pretrained_model_name_or_path, finetuned_model_name=None, *inputs, **kwargs):
+    def from_pretrained(cls, pretrained_model_name_or_path, finetuned_model_name=None):
         """
         Instantiate a BertPreTrainedModel from a pre-trained model file or a pytorch state dict.
         Download and cache the pre-trained model file if needed.
@@ -768,7 +768,7 @@ class AlbertPreTrainedModel(nn.Module):
         config = AlbertConfig.from_json_file(resolved_config_file)
         logger.info("Model config {}".format(config))
         # Instantiate model.
-        model = cls(config, *inputs, **kwargs)
+        model = cls(config)
         if state_dict is None and not from_tf:
             state_dict = torch.load(resolved_archive_file, map_location='cpu')
         if from_tf:
